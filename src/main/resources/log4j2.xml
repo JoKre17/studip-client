@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xml>
+<Configuration status="info">
+	<Appenders>
+		<Console name="ConsoleStdOut" target="SYSTEM_OUT">
+			<ThresholdFilter level="error" onMatch="DENY"
+				onMismatch="ACCEPT" />
+			<PatternLayout pattern="%d{HH:mm:ss} %level %logger{36} - %msg%n" />
+		</Console>
+		<Console name="ConsoleStdErr" target="SYSTEM_ERR">
+			<ThresholdFilter level="error" onMatch="ACCEPT"
+				onMismatch="DENY" />
+			<PatternLayout pattern="%d{HH:mm:ss} %level %logger{36} - %msg%n" />
+		</Console>
+
+		<RollingFile name="RollingFile" fileName="logs/studip/synchronizer.log"
+			filePattern="logs/studip/$${date:yyyy-MM}/app-%d{MM-dd-yyyy}-%i.log">
+			<PatternLayout>
+				<Pattern>%d{dd.MM.yyyy HH:mm:ss} %level %logger{36} - %msg%n</Pattern>
+			</PatternLayout>
+			<Policies>
+				<!-- <OnStartupTriggeringPolicy /> -->
+				<SizeBasedTriggeringPolicy size="20 MB" />
+			</Policies>
+		</RollingFile>
+	</Appenders>
+	<Loggers>
+
+		<!-- Root Logger -->
+		<Root level="debug">
+			<AppenderRef ref="ConsoleStdOut" />
+			<AppenderRef ref="ConsoleStdErr" />
+			<AppenderRef ref="RollingFile" />
+		</Root>
+
+	</Loggers>
+</Configuration>
