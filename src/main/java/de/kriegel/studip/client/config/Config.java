@@ -9,14 +9,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import de.kriegel.studip.client.auth.Credentials;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Config {
 
-	Logger log = LogManager.getLogger(Config.class);
+	private final Logger log = LoggerFactory.getLogger(Config.class);
 
 	private final String[] OPTIONS = { "baseUri", "username", "password" };
 	public List<String> OPT_PARAMS = new ArrayList<>(Arrays.asList(OPTIONS));

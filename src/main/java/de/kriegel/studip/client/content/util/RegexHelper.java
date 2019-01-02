@@ -4,14 +4,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.SystemUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import de.kriegel.studip.client.content.model.data.Id;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RegexHelper {
 
-	private final static Logger log = LogManager.getLogger(RegexHelper.class);
+	private final static Logger log = LoggerFactory.getLogger(RegexHelper.class);
 
 	private static String[][] UMLAUT_REPLACEMENTS = { { "Ä", "Ae" }, { "Ü", "Ue" }, { "Ö", "Oe" }, { "ä", "ae" },
 			{ "ü", "ue" }, { "ö", "oe" }, { "ß", "ss" } };

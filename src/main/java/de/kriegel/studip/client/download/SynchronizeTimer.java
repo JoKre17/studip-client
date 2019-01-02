@@ -1,8 +1,8 @@
 package de.kriegel.studip.client.download;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -12,8 +12,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.json.simple.parser.ParseException;
 
 import de.kriegel.studip.client.content.model.data.Course;
@@ -21,16 +19,17 @@ import de.kriegel.studip.client.content.model.file.FileRefTree;
 import de.kriegel.studip.client.exception.NotAuthenticatedException;
 import de.kriegel.studip.client.service.CourseService;
 import de.kriegel.studip.client.service.StudIPClient;
-import javafx.application.Platform;
-import javafx.scene.control.Label;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SynchronizeTimer extends Thread {
 
-	private static final Logger log = LogManager.getLogger(SynchronizeTimer.class);
+	private static final Logger log = LoggerFactory.getLogger(SynchronizeTimer.class);
 
+	private List<SynchronizeTimerTriggeredListener> synchronizeTimerTriggeredListeners;
+	
 	private StudIPClient studipClient;
 	private long sleepTimeMillis = 0;
-	private Label nextSynchAtLabel;
 
 	public static final long SLEEP_TIME_BEFORE_FIRST_SYNCH_IN_MILLIS = 30000;
 	private boolean firstRun = true;
@@ -44,9 +43,8 @@ public class SynchronizeTimer extends Thread {
 
 	private AtomicBoolean cancelled = new AtomicBoolean(false);
 
-	public SynchronizeTimer(StudIPClient studipClient, long sleepTimeMillis, Label nextSynchAtLabel) {
+	public SynchronizeTimer(StudIPClient studipClient, long sleepTimeMillis) {
 		this.studipClient = studipClient;
-		this.nextSynchAtLabel = nextSynchAtLabel;
 
 		this.sleepTimeMillis = sleepTimeMillis;
 		this.setDaemon(true);
@@ -102,10 +100,13 @@ public class SynchronizeTimer extends Thread {
 		// Run
 		while (true) {
 
-			setNextSynchAtLabelText();
-
 			// wait 30 seconds before first synch
 			if (firstRun) {
+				
+				Calendar c = Calendar.getInstance();
+				c.add(Calendar.MILLISECOND, (int) SLEEP_TIME_BEFORE_FIRST_SYNCH_IN_MILLIS);
+				synchronizeTimerTriggeredListeners.forEach(trigger -> trigger.onTrigger(c.getTime()));
+				
 				try {
 					log.debug("Waiting " + (SLEEP_TIME_BEFORE_FIRST_SYNCH_IN_MILLIS / 1000.0)
 							+ " seconds before first run.");
@@ -182,13 +183,14 @@ public class SynchronizeTimer extends Thread {
 
 				// if run only once at startup, then interrupt here
 				if (sleepTimeMillis == 0) {
-					Platform.runLater(() -> {
-						nextSynchAtLabel.setText("");
-					});
+					synchronizeTimerTriggeredListeners.forEach(trigger -> trigger.onTrigger(new Date(0)));
 					break;
 				}
+				
+				Calendar c = Calendar.getInstance();
+				c.add(Calendar.MILLISECOND, (int) sleepTimeMillis);
+				synchronizeTimerTriggeredListeners.forEach(trigger -> trigger.onTrigger(c.getTime()));
 
-				setNextSynchAtLabelText();
 				Thread.sleep(sleepTimeMillis);
 			} catch (InterruptedException e) {
 				log.warn(e.getMessage(), e);
@@ -198,21 +200,18 @@ public class SynchronizeTimer extends Thread {
 		deinit();
 	}
 
-	private void setNextSynchAtLabelText() {
-		Calendar c = Calendar.getInstance();
-
-		if (firstRun) {
-			c.add(Calendar.MILLISECOND, (int) SLEEP_TIME_BEFORE_FIRST_SYNCH_IN_MILLIS);
-		} else {
-			c.add(Calendar.MILLISECOND, (int) sleepTimeMillis);
-		}
-
-		SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss");
-		String content = format.format(c.getTime());
-
-		Platform.runLater(() -> {
-			nextSynchAtLabel.setText("Next run at " + content + " (local time)");
-		});
+	public void addSynchronizeTimerTriggeredListener(SynchronizeTimerTriggeredListener listener) {
+		this.synchronizeTimerTriggeredListeners.add(listener);
+	}
+	
+	public void removeSynchronizeTimerTriggeredListener(SynchronizeTimerTriggeredListener listener) {
+		this.synchronizeTimerTriggeredListeners.remove(listener);
+	}
+	
+	public interface SynchronizeTimerTriggeredListener {
+		
+		public void onTrigger(Date nextTriggerDate);
+		
 	}
 
 }

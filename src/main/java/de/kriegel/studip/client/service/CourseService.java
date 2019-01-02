@@ -8,15 +8,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.apache.http.HttpResponse;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import de.kriegel.studip.client.config.Endpoints;
 import de.kriegel.studip.client.config.SubPaths;
@@ -30,10 +30,11 @@ import de.kriegel.studip.client.content.model.file.FileRefNode;
 import de.kriegel.studip.client.content.model.file.FileRefTree;
 import de.kriegel.studip.client.download.DownloadManager;
 import de.kriegel.studip.client.exception.NotAuthenticatedException;
+import okhttp3.Response;
 
 public class CourseService {
 
-	private static final Logger log = LogManager.getLogger(CourseService.class);
+	private static final Logger log = LoggerFactory.getLogger(CourseService.class);
 
 	private final String TUTORIAL_IDENTIFIER = "Übung";
 
@@ -71,13 +72,13 @@ public class CourseService {
 			courseCache.get(courseId);
 		}
 
-		HttpResponse response;
+		Response response;
 
 		try {
 			response = httpClient
-					.get(SubPaths.API.toString() + Endpoints.COURSE.toString().replace(":course_id", courseId.asHex()));
+					.get(SubPaths.API.toString() + Endpoints.COURSE.toString().replace(":course_id", courseId.asHex())).get();
 
-			if (response.getStatusLine().getStatusCode() / 100 == 2) {
+			if (response.isSuccessful()) {
 				String responseBody = BasicHttpClient.getResponseBody(response);
 				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
@@ -92,6 +93,10 @@ public class CourseService {
 			e.printStackTrace();
 		} catch (ParseException e) {
 			e.printStackTrace();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			e.printStackTrace();
 		}
 
 		return null;
@@ -100,29 +105,35 @@ public class CourseService {
 	public int getAmountCourses() throws NotAuthenticatedException, ParseException {
 		authService.checkIfAuthenticated();
 
-		HttpResponse response;
+		Response response;
 
 		try {
 			response = httpClient.get(SubPaths.API.toString()
 					+ Endpoints.USER_COURSES.toString().replace(":user_id", authService.getCurrentUserId().asHex())
-					+ "?limit=1");
+					+ "?limit=1").get();
+
+			if (response.isSuccessful()) {
+				String responseBody = BasicHttpClient.getResponseBody(response);
+				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+				if (responseJson.containsKey("pagination")) {
+					JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
+
+					if (paginationJson.containsKey("total")) {
+						return Integer.parseInt(paginationJson.get("total").toString());
+					}
+				}
+			}
 		} catch (URISyntaxException | IOException e) {
 			e.printStackTrace();
 			return -1;
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			e.printStackTrace();
 		}
 
-		if (response.getStatusLine().getStatusCode() / 100 == 2) {
-			String responseBody = BasicHttpClient.getResponseBody(response);
-			JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
-			if (responseJson.containsKey("pagination")) {
-				JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
-
-				if (paginationJson.containsKey("total")) {
-					return Integer.parseInt(paginationJson.get("total").toString());
-				}
-			}
-		}
 
 		return -1;
 	}
@@ -143,33 +154,40 @@ public class CourseService {
 
 		List<Course> allCourses = new ArrayList<>();
 
-		HttpResponse response;
+		Response response;
 
 		for (int offset = 0; offset < totalAmountCourses; offset += limit) {
 			try {
 				response = httpClient.get(SubPaths.API.toString()
 						+ Endpoints.USER_COURSES.toString().replace(":user_id", authService.getCurrentUserId().asHex())
-						+ "?offset=" + offset + "&limit=" + limit);
+						+ "?offset=" + offset + "&limit=" + limit).get();
+
+				if (response.isSuccessful()) {
+					String responseBody = BasicHttpClient.getResponseBody(response);
+					JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+					if (responseJson.containsKey("collection")) {
+						((Map<String, JSONObject>) responseJson.get("collection")).forEach((link, courseJson) -> {
+
+							Course course = Course.fromJson(courseJson);
+
+							courseCache.putIfAbsent(course.getId(), course);
+
+							allCourses.add(course);
+						});
+					}
+				}
+
 			} catch (URISyntaxException | IOException e) {
 				e.printStackTrace();
 				return null;
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			} catch (ExecutionException e) {
+				e.printStackTrace();
 			}
 
-			if (response.getStatusLine().getStatusCode() / 100 == 2) {
-				String responseBody = BasicHttpClient.getResponseBody(response);
-				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
-				if (responseJson.containsKey("collection")) {
-					((Map<String, JSONObject>) responseJson.get("collection")).forEach((link, courseJson) -> {
-
-						Course course = Course.fromJson(courseJson);
-
-						courseCache.putIfAbsent(course.getId(), course);
-
-						allCourses.add(course);
-					});
-				}
-			}
 		}
 
 		return allCourses;
@@ -196,10 +214,10 @@ public class CourseService {
 	public FileRefTree getFileRefTree(Course course) throws Exception {
 		authService.checkIfAuthenticated();
 
-		HttpResponse response;
+		Response response;
 		try {
 			response = httpClient.get(SubPaths.API.toString()
-					+ Endpoints.COURSE_TOP_FOLDER.toString().replace(":course_id", course.getId().asHex()));
+					+ Endpoints.COURSE_TOP_FOLDER.toString().replace(":course_id", course.getId().asHex())).get();
 		} catch (URISyntaxException | IOException e) {
 			e.printStackTrace();
 			return null;
@@ -218,35 +236,49 @@ public class CourseService {
 	private FileRef getFileRefFromId(Id id) throws NotAuthenticatedException, ParseException {
 		authService.checkIfAuthenticated();
 
-		HttpResponse response;
+		Response response;
 		try {
-			response = httpClient.get(SubPaths.API + Endpoints.FILE.getPath().replace(":file_id", id.asHex()));
+			response = httpClient.get(SubPaths.API + Endpoints.FILE.getPath().replace(":file_id", id.asHex())).get();
+
+			String responseBody = BasicHttpClient.getResponseBody(response);
+			JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+			return FileRef.fromJson(responseJson);
+
 		} catch (URISyntaxException | IOException e) {
 			e.printStackTrace();
 			return null;
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			e.printStackTrace();
 		}
 
-		String responseBody = BasicHttpClient.getResponseBody(response);
-		JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
-
-		return FileRef.fromJson(responseJson);
+		return null;
 	}
 
 	private Folder getFolderFromId(Id id) throws NotAuthenticatedException, ParseException {
 		authService.checkIfAuthenticated();
 
-		HttpResponse response;
+		Response response;
 		try {
-			response = httpClient.get(SubPaths.API + Endpoints.FOLDER.getPath().replace(":folder_id", id.asHex()));
+			response = httpClient.get(SubPaths.API + Endpoints.FOLDER.getPath().replace(":folder_id", id.asHex())).get();
+
+			String responseBody = BasicHttpClient.getResponseBody(response);
+			JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+			return Folder.fromJson(responseJson);
+
 		} catch (URISyntaxException | IOException e) {
 			e.printStackTrace();
 			return null;
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			e.printStackTrace();
 		}
 
-		String responseBody = BasicHttpClient.getResponseBody(response);
-		JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
-
-		return Folder.fromJson(responseJson);
+		return null;
 	}
 
 	private void fetchAndAddFileRefsForCourseRecursively(FileRefNode node, FileRefTree fileRefTree) throws Exception {
@@ -294,33 +326,40 @@ public class CourseService {
 	public Semester getSemesterById(Id id) throws NotAuthenticatedException, ParseException {
 		authService.checkIfAuthenticated();
 
-		HttpResponse response;
+		Response response;
 
 		try {
-			response = httpClient.get(SubPaths.API + Endpoints.SEMESTER.getPath().replace(":semester_id", id.asHex()));
+			response = httpClient.get(SubPaths.API + Endpoints.SEMESTER.getPath().replace(":semester_id", id.asHex())).get();
+
+			String responseBody = BasicHttpClient.getResponseBody(response);
+			JSONObject responseJson = (JSONObject) (new JSONParser().parse(responseBody));
+
+			Semester semester = Semester.fromJson(responseJson);
+
+			return semester;
+
 		} catch (URISyntaxException | IOException e) {
 			e.printStackTrace();
 			return null;
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			e.printStackTrace();
 		}
 
-		String responseBody = BasicHttpClient.getResponseBody(response);
-		JSONObject responseJson = (JSONObject) (new JSONParser().parse(responseBody));
-
-		Semester semester = Semester.fromJson(responseJson);
-
-		return semester;
+		return null;
 	}
 
 	public CourseNews getCourseNewsForCourseNewsId(Id courseId, Id courseNewsId) throws NotAuthenticatedException {
 		authService.checkIfAuthenticated();
 
-		HttpResponse response;
+		Response response;
 
 		try {
 			response = httpClient.get(SubPaths.API.toString()
-					+ Endpoints.COURSE_NEWS.toString().replace(":news_id", courseNewsId.asHex()));
+					+ Endpoints.COURSE_NEWS.toString().replace(":news_id", courseNewsId.asHex())).get();
 
-			if (response.getStatusLine().getStatusCode() / 100 == 2) {
+			if (response.isSuccessful()) {
 				String responseBody = BasicHttpClient.getResponseBody(response);
 				log.debug("getCourseNewsForCourseNewsId: Response: " + responseBody);
 				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
@@ -329,7 +368,7 @@ public class CourseService {
 				return CourseNews.fromJson(responseJson);
 			} else {
 				log.error("Could not get CourseNews for CourseNewsId " + courseNewsId);
-				log.error(response.getStatusLine());
+				log.error(response.message());
 				log.error("Returning null instead.");
 
 				return null;
@@ -339,6 +378,10 @@ public class CourseService {
 			e.printStackTrace();
 		} catch (ParseException e) {
 			e.printStackTrace();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			e.printStackTrace();
 		}
 
 		return null;
@@ -347,27 +390,32 @@ public class CourseService {
 	public int getAmountCourseNewsForCourseId(Id id) throws NotAuthenticatedException, ParseException {
 		authService.checkIfAuthenticated();
 
-		HttpResponse response;
+		Response response;
 
 		try {
 			response = httpClient.get(SubPaths.API.toString()
-					+ Endpoints.ALL_COURSE_NEWS.toString().replace(":course_id", id.asHex()) + "?limit=1");
+					+ Endpoints.ALL_COURSE_NEWS.toString().replace(":course_id", id.asHex()) + "?limit=1").get();
+
+			if (response.isSuccessful()) {
+				String responseBody = BasicHttpClient.getResponseBody(response);
+				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+				if (responseJson.containsKey("pagination")) {
+					JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
+
+					if (paginationJson.containsKey("total")) {
+						return Integer.parseInt(paginationJson.get("total").toString());
+					}
+				}
+			}
+
 		} catch (URISyntaxException | IOException e) {
 			e.printStackTrace();
 			return -1;
-		}
-
-		if (response.getStatusLine().getStatusCode() / 100 == 2) {
-			String responseBody = BasicHttpClient.getResponseBody(response);
-			JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
-
-			if (responseJson.containsKey("pagination")) {
-				JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
-
-				if (paginationJson.containsKey("total")) {
-					return Integer.parseInt(paginationJson.get("total").toString());
-				}
-			}
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			e.printStackTrace();
 		}
 
 		return -1;
@@ -383,32 +431,38 @@ public class CourseService {
 
 		List<CourseNews> allCourseNews = new ArrayList<>();
 
-		HttpResponse response;
+		Response response;
 
 		for (int offset = 0; offset < totalAmountCourseNews; offset += limit) {
 			try {
 				response = httpClient.get(
 						SubPaths.API.toString() + Endpoints.ALL_COURSE_NEWS.toString().replace(":course_id", id.asHex())
-								+ "?offset=" + offset + "&limit=" + limit);
+								+ "?offset=" + offset + "&limit=" + limit).get();
+
+				if (response.isSuccessful()) {
+					String responseBody = BasicHttpClient.getResponseBody(response);
+					JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+					if (responseJson.containsKey("collection")) {
+						((Map<String, JSONObject>) responseJson.get("collection")).forEach((link, courseNewsJson) -> {
+
+							courseNewsJson.put("course_id", id);
+							CourseNews courseNews = CourseNews.fromJson(courseNewsJson);
+
+							allCourseNews.add(courseNews);
+						});
+					}
+				}
+
 			} catch (URISyntaxException | IOException e) {
 				e.printStackTrace();
 				return null;
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			} catch (ExecutionException e) {
+				e.printStackTrace();
 			}
 
-			if (response.getStatusLine().getStatusCode() / 100 == 2) {
-				String responseBody = BasicHttpClient.getResponseBody(response);
-				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
-
-				if (responseJson.containsKey("collection")) {
-					((Map<String, JSONObject>) responseJson.get("collection")).forEach((link, courseNewsJson) -> {
-
-						courseNewsJson.put("course_id", id);
-						CourseNews courseNews = CourseNews.fromJson(courseNewsJson);
-
-						allCourseNews.add(courseNews);
-					});
-				}
-			}
 		}
 
 		return allCourseNews;

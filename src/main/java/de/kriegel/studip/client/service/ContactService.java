@@ -1,11 +1,12 @@
 package de.kriegel.studip.client.service;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ContactService {
 
-	private static final Logger log = LogManager.getLogger(ContactService.class);
+	private static final Logger log = LoggerFactory.getLogger(ContactService.class);
 	
 	private final BasicHttpClient httpClient;
 

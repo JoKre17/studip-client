@@ -5,153 +5,173 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpHeaders;
-import org.apache.http.HttpResponse;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.ClientProtocolException;
-import org.apache.http.client.CookieStore;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.BasicCookieStore;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.message.BasicHeader;
-import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.util.EntityUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import de.kriegel.studip.client.auth.Credentials;
+import okhttp3.Authenticator;
+import okhttp3.Cookie;
+import okhttp3.CookieJar;
+import okhttp3.Credentials;
+import okhttp3.FormBody;
+import okhttp3.HttpUrl;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.OkHttpClient.Builder;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.Route;
 
 /**
  * HttpClient used to communicate via HTTP Requests in a simple way
- * 
- * @author Josef
  *
+ * @author Josef
  */
 public class BasicHttpClient {
 
-	private static final Logger log = LogManager.getLogger(BasicHttpClient.class);
-
-	private final String USER_AGENT = "Mozilla/5.0";
+	private static final Logger log = LoggerFactory.getLogger(BasicHttpClient.class);
 
 	private URI baseUri;
-	private Credentials credentials;
+	private de.kriegel.studip.client.auth.Credentials credentials;
+	private ExecutorService executorService;
 
-	HttpClientBuilder clientBuilder;
+	Builder clientBuilder;
 
 	/**
-	 * 
 	 * @param baseUri
 	 * @param credentials
 	 */
-	public BasicHttpClient(URI baseUri, Credentials credentials) {
+	public BasicHttpClient(URI baseUri, de.kriegel.studip.client.auth.Credentials credentials,
+			ExecutorService executorService) {
 		assert baseUri != null;
 		assert credentials != null;
+		assert executorService != null;
 
 		this.baseUri = baseUri;
 		this.credentials = credentials;
+		this.executorService = executorService;
 
 		configureHttpClientBuilder();
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	private void configureHttpClientBuilder() {
-		clientBuilder = HttpClientBuilder.create();
-		clientBuilder.setConnectionTimeToLive(2000, TimeUnit.MILLISECONDS);
-		clientBuilder.setUserAgent(USER_AGENT);
+		clientBuilder = new Builder();
+		clientBuilder.connectTimeout(2000, TimeUnit.MILLISECONDS);
 
-		CookieStore cookieStore = new BasicCookieStore();
-		clientBuilder.setDefaultCookieStore(cookieStore);
+		clientBuilder.cookieJar(new CookieJar() {
 
-		List<Header> defaultHeaders = new ArrayList<>();
+			private List<Cookie> cookies;
 
-		// add basic authorization header
-		String toEncode = credentials.getUsername() + ":" + credentials.getPassword();
-		String b64AuthEncoded = Base64.getEncoder().encodeToString(toEncode.getBytes());
-		defaultHeaders.add(new BasicHeader(HttpHeaders.AUTHORIZATION, "Basic " + b64AuthEncoded));
+			@Override
+			public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
+				this.cookies = cookies;
+			}
 
-		clientBuilder.setDefaultHeaders(defaultHeaders);
+			@Override
+			public List<Cookie> loadForRequest(HttpUrl url) {
+				if (cookies != null)
+					return cookies;
+				return new ArrayList<Cookie>();
+
+			}
+
+		});
+
+		clientBuilder.authenticator(new Authenticator() {
+			@Override
+			public Request authenticate(Route route, Response response) throws IOException {
+				if (response.request().header("Authorization") != null) {
+					return null; // Give up, we've already attempted to authenticate.
+				}
+
+				log.debug("Authenticating for response: " + response);
+				log.debug("Challenges: " + response.challenges());
+
+				String credential = Credentials.basic(credentials.getUsername(), credentials.getPassword());
+				return response.request().newBuilder().header("Authorization", credential).build();
+			}
+		});
+
 	}
 
 	/**
-	 * 
 	 * @return
 	 */
-	private CloseableHttpClient getHttpClient() {
+	private OkHttpClient getHttpClient() {
 		assert clientBuilder != null;
 
 		return clientBuilder.build();
 	}
 
-	public static String getResponseBody(HttpResponse response) {
+	public static String getResponseBody(Response response) {
 		assert response != null;
 
-		String responseBody;
+		String responseBody = "";
 		try {
-			HttpEntity entity = response.getEntity();
-
-			responseBody = EntityUtils.toString(entity);
+			responseBody = response.body().string();
 		} catch (IOException e) {
 			e.printStackTrace();
-			return "";
 		}
 
 		return responseBody;
 	}
 
 	/**
-	 * 
 	 * @param subpath
 	 * @return
 	 * @throws ClientProtocolException
 	 * @throws URISyntaxException
 	 * @throws IOException
 	 */
-	public HttpResponse get(String subpath) throws ClientProtocolException, URISyntaxException, IOException {
+	public Future<Response> get(String subpath) throws URISyntaxException, IOException {
 		return get(new URI(subpath));
 	}
 
 	/**
-	 * 
 	 * @param subpath
 	 * @return
 	 * @throws URISyntaxException
 	 * @throws ClientProtocolException
 	 * @throws IOException
 	 */
-	public HttpResponse get(URI subpath)
-			throws URISyntaxException, ClientProtocolException, UnknownHostException, IOException {
+	public Future<Response> get(URI subpath) throws URISyntaxException, UnknownHostException, IOException {
 		assert subpath != null;
 
-		CloseableHttpClient client = getHttpClient();
+		OkHttpClient httpClient = getHttpClient();
 
-		URI requestUri = new URI(baseUri.toString() + subpath.toString());
-		log.debug("GET " + requestUri);
-		HttpGet get = new HttpGet(requestUri);
+		Request request = new Request.Builder().url(baseUri.toString() + subpath.toString()).build();
 
-		HttpResponse response = client.execute(get);
+		Future<Response> futureGetResponse = null;
 
-		// client.close();
+		try {
+			futureGetResponse = executorService.submit(new Callable<Response>() {
+				@Override
+				public Response call() throws Exception {
+					return httpClient.newCall(request).execute();
+				}
+			});
+		} catch (RejectedExecutionException e) {
+			e.printStackTrace();
+		} catch (NullPointerException e) {
+			e.printStackTrace();
+		}
 
-		return response;
+		return futureGetResponse;
 	}
 
 	/**
-	 * 
 	 * @param subpath
 	 * @param params
 	 * @return
@@ -159,13 +179,11 @@ public class BasicHttpClient {
 	 * @throws URISyntaxException
 	 * @throws IOException
 	 */
-	public HttpResponse postJson(String subpath, JSONObject params)
-			throws ClientProtocolException, URISyntaxException, IOException {
+	public Future<Response> postJson(String subpath, JSONObject params) throws URISyntaxException, IOException {
 		return postJson(new URI(subpath), params);
 	}
 
 	/**
-	 * 
 	 * @param subpath
 	 * @param params
 	 * @return
@@ -173,40 +191,34 @@ public class BasicHttpClient {
 	 * @throws ClientProtocolException
 	 * @throws IOException
 	 */
-	public HttpResponse postJson(URI subpath, JSONObject params)
-			throws URISyntaxException, ClientProtocolException, IOException {
+	public Future<Response> postJson(URI subpath, JSONObject params) throws URISyntaxException, IOException {
 		assert subpath != null;
 
-		HttpClient httpClient = getHttpClient();
+		OkHttpClient httpClient = getHttpClient();
 
-		URI requestUri = new URI(baseUri.toString() + subpath.toString());
-		log.debug("POST " + requestUri);
-		HttpPost post = new HttpPost(requestUri);
+		log.debug("POST " + baseUri.toString() + subpath.toString());
+		Request request = new Request.Builder().url(baseUri.toString() + subpath.toString())
+				.post(RequestBody.create(MediaType.parse("application/json"), params.toString())).build();
 
-		if (params != null && params.size() != 0) {
-			post.addHeader(HttpHeaders.CONTENT_TYPE, "application/json");
+		Future<Response> futurePostResponse = null;
 
-			StringEntity entity = new StringEntity(params.toString());
-			post.setEntity(entity);
+		try {
+			futurePostResponse = executorService.submit(new Callable<Response>() {
+				@Override
+				public Response call() throws Exception {
+					return httpClient.newCall(request).execute();
+				}
+			});
+		} catch (RejectedExecutionException e) {
+			e.printStackTrace();
+		} catch (NullPointerException e) {
+			e.printStackTrace();
 		}
 
-		HttpResponse response = httpClient.execute(post);
-
-		// try {
-		// StringWriter writer = new StringWriter();
-		// IOUtils.copy(new InputStreamReader(response.getEntity().getContent(),
-		// "utf-8"), writer);
-		// String responseContent = writer.toString();
-		// log.debug(responseContent);
-		// } catch (UnsupportedOperationException | IOException e) {
-		// log.error(e);
-		// }
-
-		return response;
+		return futurePostResponse;
 	}
 
 	/**
-	 * 
 	 * @param subpath
 	 * @param urlEncodedMap
 	 * @return
@@ -214,13 +226,12 @@ public class BasicHttpClient {
 	 * @throws URISyntaxException
 	 * @throws IOException
 	 */
-	public HttpResponse postURLEncoded(String subpath, Map<String, String> urlEncodedMap)
-			throws ClientProtocolException, URISyntaxException, IOException {
+	public Future<Response> postURLEncoded(String subpath, Map<String, String> urlEncodedMap)
+			throws URISyntaxException, IOException {
 		return postURLEncoded(new URI(subpath), urlEncodedMap);
 	}
 
 	/**
-	 * 
 	 * @param subpath
 	 * @param urlEncodedMap
 	 * @return
@@ -228,39 +239,43 @@ public class BasicHttpClient {
 	 * @throws ClientProtocolException
 	 * @throws IOException
 	 */
-	public HttpResponse postURLEncoded(URI subpath, Map<String, String> urlEncodedMap)
-			throws URISyntaxException, ClientProtocolException, IOException {
+	public Future<Response> postURLEncoded(URI subpath, Map<String, String> urlEncodedMap)
+			throws URISyntaxException, IOException {
 		assert subpath != null;
 
-		HttpClient httpClient = getHttpClient();
-
-		URI requestUri = new URI(baseUri.toString() + subpath.toString());
-		HttpPost post = new HttpPost(requestUri);
-
+		OkHttpClient httpClient = getHttpClient();
+		
+		log.debug("POST " + baseUri.toString() + subpath.toString());
+		Request.Builder requestBuilder = new Request.Builder().url(baseUri.toString() + subpath.toString());
+		
 		if (urlEncodedMap != null && !urlEncodedMap.isEmpty()) {
-			post.addHeader(HttpHeaders.CONTENT_TYPE, "application/x-www-form-urlencoded");
-
-			List<NameValuePair> urlParameters = new ArrayList<NameValuePair>();
+			FormBody.Builder formBody = new FormBody.Builder();
+			
 			urlEncodedMap.entrySet().stream().forEach(e -> {
-				urlParameters.add(new BasicNameValuePair(e.getKey(), e.getValue()));
+				formBody.add(e.getKey(), e.getValue());
 			});
 
-			post.setEntity(new UrlEncodedFormEntity(urlParameters));
+			requestBuilder.post(formBody.build());
 		}
 
-		HttpResponse response = httpClient.execute(post);
+		Request request = requestBuilder.build();
+		
+		Future<Response> futurePostResponse = null;
 
-		// try {
-		// StringWriter writer = new StringWriter();
-		// IOUtils.copy(new InputStreamReader(response.getEntity().getContent(),
-		// "utf-8"), writer);
-		// String responseContent = writer.toString();
-		// log.debug(responseContent);
-		// } catch (UnsupportedOperationException | IOException e) {
-		// log.error(e);
-		// }
+		try {
+			futurePostResponse = executorService.submit(new Callable<Response>() {
+				@Override
+				public Response call() throws Exception {
+					return httpClient.newCall(request).execute();
+				}
+			});
+		} catch (RejectedExecutionException e) {
+			e.printStackTrace();
+		} catch (NullPointerException e) {
+			e.printStackTrace();
+		}
 
-		return response;
+		return futurePostResponse;
 	}
 
 }

@@ -6,15 +6,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.text.StringEscapeUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONObject;
 
 import de.kriegel.studip.client.content.util.RegexHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Course {
 
-	private static final Logger log = LogManager.getLogger(Course.class);
+	private static final Logger log = LoggerFactory.getLogger(Course.class);
 
 	private final Id id;
 	private final float number;

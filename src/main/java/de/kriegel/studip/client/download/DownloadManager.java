@@ -18,10 +18,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.http.HttpResponse;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.json.simple.parser.ParseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import de.kriegel.studip.client.config.Endpoints;
 import de.kriegel.studip.client.config.SubPaths;
@@ -36,10 +35,11 @@ import de.kriegel.studip.client.event.CourseDownloadProgressEvent;
 import de.kriegel.studip.client.exception.NotAuthenticatedException;
 import de.kriegel.studip.client.service.BasicHttpClient;
 import de.kriegel.studip.client.service.CourseService;
+import okhttp3.Response;
 
 public class DownloadManager extends Observable {
 
-	private static final Logger log = LogManager.getLogger(DownloadManager.class);
+	private static final Logger log = LoggerFactory.getLogger(DownloadManager.class);
 
 	private final List<CourseDownloadFinishedEventListener> courseDownloadFinishedEventListeners = new ArrayList<>();
 
@@ -222,13 +222,13 @@ public class DownloadManager extends Observable {
 
 				downloadTasks.add(CompletableFuture.runAsync(() -> {
 
-					HttpResponse response;
+					Response response;
 
 					try {
 						response = httpClient.get(SubPaths.API
-								+ Endpoints.FILE_DOWNLOAD.getPath().replace(":file_id", fileRef.getId().asHex()));
+								+ Endpoints.FILE_DOWNLOAD.getPath().replace(":file_id", fileRef.getId().asHex())).get();
 
-						BufferedInputStream bis = new BufferedInputStream(response.getEntity().getContent());
+						BufferedInputStream bis = new BufferedInputStream(response.body().byteStream());
 						BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(outputFile));
 
 						byte[] buffer = new byte[512];
@@ -244,6 +244,10 @@ public class DownloadManager extends Observable {
 								+ " MB");
 
 					} catch (URISyntaxException | IOException e) {
+						e.printStackTrace();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					} catch (ExecutionException e) {
 						e.printStackTrace();
 					}
 				}, es));

@@ -5,7 +5,7 @@
 		<Console name="ConsoleStdOut" target="SYSTEM_OUT">
 			<ThresholdFilter level="error" onMatch="DENY"
 				onMismatch="ACCEPT" />
-			<PatternLayout pattern="%d{HH:mm:ss} %level %logger{36} - %msg%n" />
+			<PatternLayout pattern="%d{HH:mm:ss} %level %c{3.7.6.1} - %msg%n" />
 		</Console>
 		<Console name="ConsoleStdErr" target="SYSTEM_ERR">
 			<ThresholdFilter level="error" onMatch="ACCEPT"
@@ -16,7 +16,7 @@
 		<RollingFile name="RollingFile" fileName="logs/studip/synchronizer.log"
 			filePattern="logs/studip/$${date:yyyy-MM}/app-%d{MM-dd-yyyy}-%i.log">
 			<PatternLayout>
-				<Pattern>%d{dd.MM.yyyy HH:mm:ss} %level %logger{36} - %msg%n</Pattern>
+				<Pattern>%d{dd.MM.yyyy HH:mm:ss} %level %c{1.}%logger{36} - %msg%n</Pattern>
 			</PatternLayout>
 			<Policies>
 				<!-- <OnStartupTriggeringPolicy /> -->
