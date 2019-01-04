@@ -29,5 +29,7 @@ for line in lines:
 	urlMap[split[0]] = split[1]
 
 for name, url in urlMap.items():
-	print(name, url, ping(url))
+ if name.startswith('#'):
+  continue
+ print(name, url, ping(url))
 	
