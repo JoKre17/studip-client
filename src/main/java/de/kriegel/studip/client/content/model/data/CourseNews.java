@@ -114,7 +114,9 @@ public class CourseNews {
 		if (jsonObject.containsKey("ranges")) {
 
 			JSONArray rangesJson = (JSONArray) jsonObject.get("ranges");
-			rangesJson.forEach(range -> ranges.add(range.toString()));
+			for(int i = 0; i < rangesJson.size(); i++) {
+				ranges.add(rangesJson.get(i).toString());
+			}
 		}
 
 		return new CourseNews(courseId, id, topic, body, date, user_id, expire, allow_comments, chdate, chdate_uid,

@@ -44,7 +44,7 @@ public class AuthService {
             if (response.isSuccessful()) {
                 isAuthenticated = true;
 
-                String responseBody = BasicHttpClient.getResponseBody(response);
+                String responseBody = httpClient.getResponseBody(response).get();
                 log.debug(responseBody);
 
                 try {
@@ -56,7 +56,7 @@ public class AuthService {
 
                 return true;
             } else {
-                authErrorResponse = BasicHttpClient.getResponseBody(response);
+                authErrorResponse = httpClient.getResponseBody(response).get();
             }
 
             isAuthenticated = false;

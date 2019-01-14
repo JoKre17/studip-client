@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -79,7 +80,7 @@ public class CourseService {
 					.get(SubPaths.API.toString() + Endpoints.COURSE.toString().replace(":course_id", courseId.asHex())).get();
 
 			if (response.isSuccessful()) {
-				String responseBody = BasicHttpClient.getResponseBody(response);
+				String responseBody = httpClient.getResponseBody(response).get();
 				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
 				Course course = Course.fromJson(responseJson);
@@ -113,7 +114,7 @@ public class CourseService {
 					+ "?limit=1").get();
 
 			if (response.isSuccessful()) {
-				String responseBody = BasicHttpClient.getResponseBody(response);
+				String responseBody = httpClient.getResponseBody(response).get();
 				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
 				if (responseJson.containsKey("pagination")) {
@@ -163,18 +164,18 @@ public class CourseService {
 						+ "?offset=" + offset + "&limit=" + limit).get();
 
 				if (response.isSuccessful()) {
-					String responseBody = BasicHttpClient.getResponseBody(response);
+					String responseBody = httpClient.getResponseBody(response).get();
 					JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
 					if (responseJson.containsKey("collection")) {
-						((Map<String, JSONObject>) responseJson.get("collection")).forEach((link, courseJson) -> {
-
-							Course course = Course.fromJson(courseJson);
+						for(Entry<String, JSONObject> entry : ((Map<String, JSONObject>) responseJson.get("collection")).entrySet()) {
+							
+							Course course = Course.fromJson(entry.getValue());
 
 							courseCache.putIfAbsent(course.getId(), course);
 
 							allCourses.add(course);
-						});
+						}
 					}
 				}
 
@@ -223,7 +224,7 @@ public class CourseService {
 			return null;
 		}
 
-		String responseBody = BasicHttpClient.getResponseBody(response);
+		String responseBody = httpClient.getResponseBody(response).get();
 		JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 		Folder folder = Folder.fromJson(responseJson);
 
@@ -240,7 +241,7 @@ public class CourseService {
 		try {
 			response = httpClient.get(SubPaths.API + Endpoints.FILE.getPath().replace(":file_id", id.asHex())).get();
 
-			String responseBody = BasicHttpClient.getResponseBody(response);
+			String responseBody = httpClient.getResponseBody(response).get();
 			JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
 			return FileRef.fromJson(responseJson);
@@ -264,7 +265,7 @@ public class CourseService {
 		try {
 			response = httpClient.get(SubPaths.API + Endpoints.FOLDER.getPath().replace(":folder_id", id.asHex())).get();
 
-			String responseBody = BasicHttpClient.getResponseBody(response);
+			String responseBody = httpClient.getResponseBody(response).get();
 			JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
 			return Folder.fromJson(responseJson);
@@ -331,7 +332,7 @@ public class CourseService {
 		try {
 			response = httpClient.get(SubPaths.API + Endpoints.SEMESTER.getPath().replace(":semester_id", id.asHex())).get();
 
-			String responseBody = BasicHttpClient.getResponseBody(response);
+			String responseBody = httpClient.getResponseBody(response).get();
 			JSONObject responseJson = (JSONObject) (new JSONParser().parse(responseBody));
 
 			Semester semester = Semester.fromJson(responseJson);
@@ -360,7 +361,7 @@ public class CourseService {
 					+ Endpoints.COURSE_NEWS.toString().replace(":news_id", courseNewsId.asHex())).get();
 
 			if (response.isSuccessful()) {
-				String responseBody = BasicHttpClient.getResponseBody(response);
+				String responseBody = httpClient.getResponseBody(response).get();
 				log.debug("getCourseNewsForCourseNewsId: Response: " + responseBody);
 				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 				responseJson.put("course_id", courseId);
@@ -397,7 +398,7 @@ public class CourseService {
 					+ Endpoints.ALL_COURSE_NEWS.toString().replace(":course_id", id.asHex()) + "?limit=1").get();
 
 			if (response.isSuccessful()) {
-				String responseBody = BasicHttpClient.getResponseBody(response);
+				String responseBody = httpClient.getResponseBody(response).get();
 				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
 				if (responseJson.containsKey("pagination")) {
@@ -440,17 +441,16 @@ public class CourseService {
 								+ "?offset=" + offset + "&limit=" + limit).get();
 
 				if (response.isSuccessful()) {
-					String responseBody = BasicHttpClient.getResponseBody(response);
+					String responseBody = httpClient.getResponseBody(response).get();
 					JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
 					if (responseJson.containsKey("collection")) {
-						((Map<String, JSONObject>) responseJson.get("collection")).forEach((link, courseNewsJson) -> {
-
-							courseNewsJson.put("course_id", id);
-							CourseNews courseNews = CourseNews.fromJson(courseNewsJson);
-
+						for(Entry<String, JSONObject> entry : ((Map<String, JSONObject>) responseJson.get("collection")).entrySet()) {
+							entry.getValue().put("course_id", id);
+							CourseNews courseNews = CourseNews.fromJson(entry.getValue());
+							
 							allCourseNews.add(courseNews);
-						});
+						}
 					}
 				}
 

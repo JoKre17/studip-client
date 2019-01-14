@@ -4,13 +4,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.json.simple.JSONObject;
-
-import de.kriegel.studip.client.content.util.RegexHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import de.kriegel.studip.client.content.util.RegexHelper;
 
 public class Course {
 
@@ -106,24 +107,25 @@ public class Course {
 		if (jsonObject.containsKey("lecturers")) {
 
 			JSONObject lecturersJson = (JSONObject) jsonObject.get("lecturers");
-			((Map<String, JSONObject>) lecturersJson).forEach((key, value) -> {
-				User user = User.fromJson(value);
+
+			for (Entry<String, JSONObject> entry : ((Map<String, JSONObject>) lecturersJson).entrySet()) {
+				User user = User.fromJson(entry.getValue());
 				lecturers.add(user);
-			});
+			}
 		}
 
 		if (jsonObject.containsKey("members")) {
-
-			((Map<String, Object>) jsonObject.get("members")).forEach((key, value) -> {
-				if (key.contains("count")) {
-					String memberTypeIdentifier = key.split("_")[0].toUpperCase();
+			
+			for (Entry<String, Long> entry : ((Map<String, Long>) jsonObject.get("members")).entrySet()) {
+				if (entry.getKey().contains("count")) {
+					String memberTypeIdentifier = entry.getKey().split("_")[0].toUpperCase();
 					CourseMemberType memberType = CourseMemberType.valueOf(memberTypeIdentifier);
 
-					Integer count = ((Long) value).intValue();
+					Integer count = entry.getValue().intValue();
 
 					memberCounts.put(memberType, count);
 				}
-			});
+			}
 		}
 
 		if (jsonObject.containsKey("start_semester") && jsonObject.get("start_semester") != null) {
@@ -136,11 +138,11 @@ public class Course {
 
 		if (jsonObject.containsKey("modules")) {
 
-			((Map<String, String>) jsonObject.get("modules")).forEach((moduleKey, link) -> {
-				CourseModule module = CourseModule.fromJson(moduleKey, link);
-
+			for(Entry<String, String> entry : ((Map<String, String>) jsonObject.get("modules")).entrySet()) {
+				CourseModule module = CourseModule.fromJson(entry.getKey(), entry.getValue());
+				
 				modules.add(module);
-			});
+			}
 		}
 
 		if (jsonObject.containsKey("group")) {

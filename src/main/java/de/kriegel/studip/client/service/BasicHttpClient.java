@@ -115,17 +115,25 @@ public class BasicHttpClient {
 		return clientBuilder.build();
 	}
 
-	public static String getResponseBody(Response response) {
+	public Future<String> getResponseBody(Response response) {
 		assert response != null;
 
-		String responseBody = "";
+		Future<String> futureResponseBody = null;
+
 		try {
-			responseBody = response.body().string();
-		} catch (IOException e) {
+			futureResponseBody = executorService.submit(new Callable<String>() {
+				@Override
+				public String call() throws Exception {
+					return response.body().string();
+				}
+			});
+		} catch (RejectedExecutionException e) {
+			e.printStackTrace();
+		} catch (NullPointerException e) {
 			e.printStackTrace();
 		}
 
-		return responseBody;
+		return futureResponseBody;
 	}
 
 	/**
