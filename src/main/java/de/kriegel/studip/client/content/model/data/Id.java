@@ -1,8 +1,9 @@
 package de.kriegel.studip.client.content.model.data;
 
+import java.io.Serializable;
 import java.math.BigInteger;
 
-public class Id {
+public class Id implements Serializable {
 
 	public static final int LENGTH = 32;
 	
