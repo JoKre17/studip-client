@@ -40,7 +40,9 @@ public class StudIPClient {
 	}
 	
 	public void shutdown() {
+		log.info("Shutting down StudIPClient");
 		executorService.shutdown();
+		log.info("Shut down executor service");
 	}
 	
 	public AuthService getAuthService() {
