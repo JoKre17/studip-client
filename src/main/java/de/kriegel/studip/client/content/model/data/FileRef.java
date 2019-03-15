@@ -2,7 +2,9 @@ package de.kriegel.studip.client.content.model.data;
 
 import org.json.simple.JSONObject;
 
-public class FileRef {
+import java.io.Serializable;
+
+public class FileRef implements Serializable {
 
 	private final Id id;
 	private final Id file_id;

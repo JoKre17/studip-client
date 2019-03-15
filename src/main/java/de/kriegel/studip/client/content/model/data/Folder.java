@@ -1,5 +1,6 @@
 package de.kriegel.studip.client.content.model.data;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -8,7 +9,7 @@ import org.json.simple.JSONObject;
 
 import de.kriegel.studip.client.content.util.RegexHelper;
 
-public class Folder {
+public class Folder implements Serializable {
 
 	private final boolean is_visible;
 	private final boolean is_readable;
@@ -128,21 +129,21 @@ public class Folder {
 		}
 
 		if (jsonObject.containsKey("subfolders")) {
-
-			((JSONArray) jsonObject.get("subfolders")).forEach(folderJson -> {
-				Id subfolderId = new Id(((JSONObject) folderJson).get("id").toString());
+			JSONArray subFoldersJson = (JSONArray) jsonObject.get("subfolders");
+			for(int i = 0; i < subFoldersJson.size(); i++) {
+				Id subfolderId = new Id(((JSONObject) subFoldersJson.get(i)).get("id").toString());
 
 				subfolders.add(subfolderId);
-			});
+			}
 		}
 
 		if (jsonObject.containsKey("file_refs")) {
-
-			((JSONArray) jsonObject.get("file_refs")).forEach((fileRefJson) -> {
-				Id fileRefId = new Id(((JSONObject) fileRefJson).get("id").toString());
+			JSONArray file_refsJson = (JSONArray) jsonObject.get("file_refs");
+			for(int i = 0; i < file_refsJson.size(); i++) {
+				Id fileRefId = new Id(((JSONObject) file_refsJson.get(i)).get("id").toString());
 
 				file_refs.add(fileRefId);
-			});
+			}
 		}
 
 		return new Folder(is_visible, is_readable, is_writable, id, user_id, parent_id, range_id, range_type,

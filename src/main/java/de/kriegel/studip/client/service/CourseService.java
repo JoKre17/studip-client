@@ -14,8 +14,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import de.kriegel.studip.client.content.model.data.*;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -24,12 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import de.kriegel.studip.client.config.Endpoints;
 import de.kriegel.studip.client.config.SubPaths;
-import de.kriegel.studip.client.content.model.data.Course;
-import de.kriegel.studip.client.content.model.data.CourseNews;
-import de.kriegel.studip.client.content.model.data.FileRef;
-import de.kriegel.studip.client.content.model.data.Folder;
-import de.kriegel.studip.client.content.model.data.Id;
-import de.kriegel.studip.client.content.model.data.Semester;
 import de.kriegel.studip.client.content.model.file.FileRefNode;
 import de.kriegel.studip.client.content.model.file.FileRefTree;
 import de.kriegel.studip.client.download.DownloadManager;
@@ -38,551 +34,640 @@ import okhttp3.Response;
 
 public class CourseService {
 
-	private static final Logger log = LoggerFactory.getLogger(CourseService.class);
+    private static final Logger log = LoggerFactory.getLogger(CourseService.class);
 
-	private final String TUTORIAL_IDENTIFIER = "Übung";
+    private final String TUTORIAL_IDENTIFIER = "Übung";
 
-	private final BasicHttpClient httpClient;
+    private final BasicHttpClient httpClient;
 
-	private final AuthService authService;
+    private final AuthService authService;
 
-	private final DownloadManager downloadManager;
+    private final DownloadManager downloadManager;
 
-	private final Map<Id, Course> courseCache = new HashMap<>();
+    private final Map<Id, Course> courseCache = new HashMap<>();
 
-	private final ExecutorService es = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    private final ExecutorService es = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
-	public CourseService(BasicHttpClient httpClient, AuthService authService) {
-		this.httpClient = httpClient;
-		this.authService = authService;
+    public CourseService(BasicHttpClient httpClient, AuthService authService) {
+        this.httpClient = httpClient;
+        this.authService = authService;
 
-		downloadManager = new DownloadManager(this, httpClient, new File("test").toPath());
-	}
+        downloadManager = new DownloadManager(this, httpClient, new File("test").toPath());
+    }
 
-	public void close() {
-		log.info("Closing CourseService");
-		downloadManager.close();
-		es.shutdown();
-	}
+    public void close() {
+        log.info("Closing CourseService");
+        downloadManager.close();
+        es.shutdown();
+    }
 
-	public DownloadManager getDownloadManager() {
-		return downloadManager;
-	}
+    public DownloadManager getDownloadManager() {
+        return downloadManager;
+    }
 
-	public Course getCourseById(Id courseId) throws NotAuthenticatedException {
-		authService.checkIfAuthenticated();
+    public Course getCourseById(Id courseId) throws NotAuthenticatedException {
+        authService.checkIfAuthenticated();
 
-		if (courseCache.containsKey(courseId)) {
-			courseCache.get(courseId);
-		}
+        if (courseCache.containsKey(courseId)) {
+            courseCache.get(courseId);
+        }
 
-		Response response;
+        Response response;
 
-		try {
-			response = httpClient
-					.get(SubPaths.API.toString() + Endpoints.COURSE.toString().replace(":course_id", courseId.asHex()))
-					.get();
+        try {
+            response = httpClient
+                    .get(SubPaths.API.toString() + Endpoints.COURSE.toString().replace(":course_id", courseId.asHex()))
+                    .get();
 
-			if (response.isSuccessful()) {
-				String responseBody = httpClient.getResponseBody(response).get();
-				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+            if (response.isSuccessful()) {
+                String responseBody = httpClient.getResponseBody(response).get();
+                JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
-				Course course = Course.fromJson(responseJson);
+                Course course = Course.fromJson(responseJson);
 
-				courseCache.put(courseId, course);
+                courseCache.put(courseId, course);
 
-				return course;
-			}
+                return course;
+            }
 
-		} catch (URISyntaxException | IOException e) {
-			e.printStackTrace();
-		} catch (ParseException e) {
-			e.printStackTrace();
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			e.printStackTrace();
-		}
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+        } catch (ParseException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
 
-		return null;
-	}
+        return null;
+    }
 
-	public int getAmountCourses() throws NotAuthenticatedException, ParseException {
-		authService.checkIfAuthenticated();
+    public int getAmountCourses() throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
 
-		Response response;
+        Response response;
 
-		try {
-			response = httpClient.get(SubPaths.API.toString()
-					+ Endpoints.USER_COURSES.toString().replace(":user_id", authService.getCurrentUserId().asHex())
-					+ "?limit=1").get();
+        try {
+            response = httpClient.get(SubPaths.API.toString()
+                    + Endpoints.USER_COURSES.toString().replace(":user_id", authService.getCurrentUserId().asHex())
+                    + "?limit=1").get();
 
-			if (response.isSuccessful()) {
-				String responseBody = httpClient.getResponseBody(response).get();
-				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+            if (response.isSuccessful()) {
+                String responseBody = httpClient.getResponseBody(response).get();
+                JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
-				if (responseJson.containsKey("pagination")) {
-					JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
+                if (responseJson.containsKey("pagination")) {
+                    JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
 
-					if (paginationJson.containsKey("total")) {
-						return Integer.parseInt(paginationJson.get("total").toString());
-					}
-				}
-			}
-		} catch (URISyntaxException | IOException e) {
-			e.printStackTrace();
-			return -1;
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			e.printStackTrace();
-		}
+                    if (paginationJson.containsKey("total")) {
+                        return Integer.parseInt(paginationJson.get("total").toString());
+                    }
+                }
+            }
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+            return -1;
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
 
-		return -1;
-	}
+        return -1;
+    }
 
-	/**
-	 * Retrieves the courses of the current semester
-	 * 
-	 * @return
-	 * @throws ParseException
-	 */
-	@SuppressWarnings("unchecked")
-	public List<Course> getAllCourses() throws NotAuthenticatedException, ParseException {
-		authService.checkIfAuthenticated();
+    /**
+     * Retrieves the courses of the current semester
+     *
+     * @return
+     * @throws ParseException
+     */
+    @SuppressWarnings("unchecked")
+    public List<Course> getAllCourses() throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
 
-		int totalAmountCourses = getAmountCourses();
+        int totalAmountCourses = getAmountCourses();
 
-		int limit = 20;
+        int limit = 20;
 
-		List<Course> allCourses = new ArrayList<>();
+        List<Course> allCourses = new ArrayList<>();
 
-		Response response;
+        Response response;
 
-		for (int offset = 0; offset < totalAmountCourses; offset += limit) {
-			try {
-				response = httpClient.get(SubPaths.API.toString()
-						+ Endpoints.USER_COURSES.toString().replace(":user_id", authService.getCurrentUserId().asHex())
-						+ "?offset=" + offset + "&limit=" + limit).get();
+        for (int offset = 0; offset < totalAmountCourses; offset += limit) {
+            try {
+                response = httpClient.get(SubPaths.API.toString()
+                        + Endpoints.USER_COURSES.toString().replace(":user_id", authService.getCurrentUserId().asHex())
+                        + "?offset=" + offset + "&limit=" + limit).get();
 
-				if (response.isSuccessful()) {
-					String responseBody = httpClient.getResponseBody(response).get();
-					JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+                if (response.isSuccessful()) {
+                    String responseBody = httpClient.getResponseBody(response).get();
+                    JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
-					if (responseJson.containsKey("collection")) {
-						for (Entry<String, JSONObject> entry : ((Map<String, JSONObject>) responseJson
-								.get("collection")).entrySet()) {
+                    if (responseJson.containsKey("collection")) {
+                        for (Entry<String, JSONObject> entry : ((Map<String, JSONObject>) responseJson
+                                .get("collection")).entrySet()) {
 
-							Course course = Course.fromJson(entry.getValue());
+                            Course course = Course.fromJson(entry.getValue());
 
-							courseCache.putIfAbsent(course.getId(), course);
+                            courseCache.putIfAbsent(course.getId(), course);
 
-							allCourses.add(course);
-						}
-					}
-				}
+                            allCourses.add(course);
+                        }
+                    }
+                }
 
-			} catch (URISyntaxException | IOException e) {
-				e.printStackTrace();
-				return null;
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			} catch (ExecutionException e) {
-				e.printStackTrace();
-			}
+            } catch (URISyntaxException | IOException e) {
+                e.printStackTrace();
+                return null;
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
 
-		}
+        }
 
-		return allCourses;
-	}
+        return allCourses;
+    }
 
-	public List<Course> getCoursesForSemesterId(Id semesterId) throws NotAuthenticatedException, ParseException {
+    public List<Course> getCoursesForSemesterId(Id semesterId) throws NotAuthenticatedException, ParseException {
 
-		List<Course> allCourses = getAllCourses();
+        List<Course> allCourses = getAllCourses();
 
-		List<Course> currentCourses = new ArrayList<>();
+        List<Course> currentCourses = new ArrayList<>();
 
-		for(Course course : allCourses) {
-			if(course.getStartSemesterId().equals(semesterId)) {
-				currentCourses.add(course);
-			}
-		}
+        for (Course course : allCourses) {
+            if (course.getStartSemesterId().equals(semesterId)) {
+                currentCourses.add(course);
+            }
+        }
 
-		return currentCourses;
-	}
+        return currentCourses;
+    }
 
-	public Map<Course, Course> getCourseTutorialMap() throws NotAuthenticatedException, ParseException {
-		List<Course> allCourses = getAllCourses();
+    public Map<Course, Course> getCourseTutorialMap() throws NotAuthenticatedException, ParseException {
+        List<Course> allCourses = getAllCourses();
 
-		Map<Course, Course> courseTutorialMap = new HashMap<>();
-
-		allCourses.forEach(course -> {
-			if (!course.getTitle().contains(TUTORIAL_IDENTIFIER)) {
-				Course tutorial = allCourses.stream().filter(
-						c -> c.getTitle().contains(course.getTitle()) && !c.getTitle().equals(course.getTitle()))
-						.findFirst().orElse(null);
-
-				courseTutorialMap.put(course, tutorial);
-			}
-		});
-
-		return courseTutorialMap;
-	}
-
-	public FileRefTree getFileRefTree(Course course) throws Exception {
-		authService.checkIfAuthenticated();
-
-		Response response;
-		try {
-			response = httpClient
-					.get(SubPaths.API.toString()
-							+ Endpoints.COURSE_TOP_FOLDER.toString().replace(":course_id", course.getId().asHex()))
-					.get();
-		} catch (URISyntaxException | IOException e) {
-			e.printStackTrace();
-			return null;
-		}
-
-		String responseBody = httpClient.getResponseBody(response).get();
-		JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
-		Folder folder = Folder.fromJson(responseJson);
-
-		FileRefTree fileRefTree = new FileRefTree(folder);
-		fetchAndAddFileRefsForCourseRecursively(fileRefTree.getRoot(), fileRefTree);
-
-		return fileRefTree;
-	}
-
-	private FileRef getFileRefFromId(Id id) throws NotAuthenticatedException, ParseException {
-		authService.checkIfAuthenticated();
-
-		Response response;
-		try {
-			response = httpClient.get(SubPaths.API + Endpoints.FILE.getPath().replace(":file_id", id.asHex())).get();
-
-			String responseBody = httpClient.getResponseBody(response).get();
-			JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
-
-			return FileRef.fromJson(responseJson);
-
-		} catch (URISyntaxException | IOException e) {
-			e.printStackTrace();
-			return null;
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			e.printStackTrace();
-		}
-
-		return null;
-	}
-
-	private Folder getFolderFromId(Id id) throws NotAuthenticatedException, ParseException {
-		authService.checkIfAuthenticated();
-
-		Response response;
-		try {
-			response = httpClient.get(SubPaths.API + Endpoints.FOLDER.getPath().replace(":folder_id", id.asHex()))
-					.get();
-
-			String responseBody = httpClient.getResponseBody(response).get();
-			JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
-
-			return Folder.fromJson(responseJson);
-
-		} catch (URISyntaxException | IOException e) {
-			e.printStackTrace();
-			return null;
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			e.printStackTrace();
-		}
+        Map<Course, Course> courseTutorialMap = new HashMap<>();
 
-		return null;
-	}
+        allCourses.forEach(course -> {
+            if (!course.getTitle().contains(TUTORIAL_IDENTIFIER)) {
+                Course tutorial = allCourses.stream().filter(
+                        c -> c.getTitle().contains(course.getTitle()) && !c.getTitle().equals(course.getTitle()))
+                        .findFirst().orElse(null);
+
+                courseTutorialMap.put(course, tutorial);
+            }
+        });
+
+        return courseTutorialMap;
+    }
+
+    public FileRefTree getFileRefTree(Course course) throws Exception {
+        authService.checkIfAuthenticated();
+
+        Response response;
+        try {
+            response = httpClient
+                    .get(SubPaths.API.toString()
+                            + Endpoints.COURSE_TOP_FOLDER.toString().replace(":course_id", course.getId().asHex()))
+                    .get();
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+
+        String responseBody = httpClient.getResponseBody(response).get();
+        JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+        Folder folder = Folder.fromJson(responseJson);
+
+        FileRefTree fileRefTree = new FileRefTree(folder);
+        fetchAndAddFileRefsForCourseRecursively(fileRefTree.getRoot(), fileRefTree);
+
+        return fileRefTree;
+    }
+
+    private FileRef getFileRefFromId(Id id) throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
+
+        Response response;
+        try {
+            response = httpClient.get(SubPaths.API + Endpoints.FILE.getPath().replace(":file_id", id.asHex())).get();
+
+            String responseBody = httpClient.getResponseBody(response).get();
+            JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+            return FileRef.fromJson(responseJson);
+
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+            return null;
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    private Folder getFolderFromId(Id id) throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
+
+        Response response;
+        try {
+            response = httpClient.get(SubPaths.API + Endpoints.FOLDER.getPath().replace(":folder_id", id.asHex()))
+                    .get();
+
+            String responseBody = httpClient.getResponseBody(response).get();
+            JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+            return Folder.fromJson(responseJson);
+
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+            return null;
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
 
-	private void fetchAndAddFileRefsForCourseRecursively(FileRefNode node, FileRefTree fileRefTree) throws Exception {
+    private void fetchAndAddFileRefsForCourseRecursively(FileRefNode node, FileRefTree fileRefTree) throws Exception {
 
-		if (node.isDirectory()) {
-			List<CompletableFuture<FileRef>> fileRefs = new ArrayList<>();
-			// List<FileRef> fileRefs = new ArrayList<>();
+        if (node.isDirectory()) {
+            List<CompletableFuture<FileRef>> fileRefs = new ArrayList<>();
+            // List<FileRef> fileRefs = new ArrayList<>();
 
-			node.getFolder().getFileRefs().forEach(fileRefId -> {
-				// try {
-				// fileRefs.add(getFileRefFromId(fileRefId));
-				// } catch (NotAuthenticatedException | ParseException e) {
-				// e.printStackTrace();
-				// }
-				fileRefs.add(CompletableFuture.supplyAsync(() -> {
-					try {
-						return getFileRefFromId(fileRefId);
-					} catch (NotAuthenticatedException | ParseException e) {
-						e.printStackTrace();
-					}
-					return null;
-				}, es));
-			});
-			// });
+            for(Id fileRefId : node.getFolder().getFileRefs()) {
+                // try {
+                // fileRefs.add(getFileRefFromId(fileRefId));
+                // } catch (NotAuthenticatedException | ParseException e) {
+                // e.printStackTrace();
+                // }
 
-			// for (CompletableFuture<FileRef> cfFileRef : fileRefs) {
-			// FileRefNode fileRefNode = fileRefTree.createFileNode(cfFileRef.get());
-			for (CompletableFuture<FileRef> cfFileRef : fileRefs) {
-				FileRefNode fileRefNode = fileRefTree.createFileNode(cfFileRef.get());
+                fileRefs.add(CompletableFuture.supplyAsync(new Supplier<FileRef>() {
+                    @Override
+                    public FileRef get() {
+                        try {
+                            return getFileRefFromId(fileRefId);
+                        } catch (NotAuthenticatedException | ParseException e) {
+                            e.printStackTrace();
+                        }
+                        return null;
+                    }
+                }, es));
+            }
+            // });
 
-				node.addFileRefNode(fileRefNode);
-			}
+            // for (CompletableFuture<FileRef> cfFileRef : fileRefs) {
+            // FileRefNode fileRefNode = fileRefTree.createFileNode(cfFileRef.get());
+            for (CompletableFuture<FileRef> cfFileRef : fileRefs) {
+                FileRefNode fileRefNode = fileRefTree.createFileNode(cfFileRef.get());
 
-			for (Id folderId : node.getFolder().getSubfolders()) {
-				Folder folder = getFolderFromId(folderId);
-				FileRefNode fileRefNode = fileRefTree.createFileNode(folder);
+                node.addFileRefNode(fileRefNode);
+            }
 
-				node.addFileRefNode(fileRefNode);
-				fetchAndAddFileRefsForCourseRecursively(fileRefNode, fileRefTree);
-			}
-		}
+            for (Id folderId : node.getFolder().getSubfolders()) {
+                Folder folder = getFolderFromId(folderId);
+                FileRefNode fileRefNode = fileRefTree.createFileNode(folder);
 
-	}
+                node.addFileRefNode(fileRefNode);
+                fetchAndAddFileRefsForCourseRecursively(fileRefNode, fileRefTree);
+            }
+        }
 
-	public int getAmountSemesters() throws NotAuthenticatedException, ParseException {
-		authService.checkIfAuthenticated();
+    }
 
-		Response response;
+    public int getAmountSemesters() throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
 
-		try {
-			response = httpClient.get(SubPaths.API.toString() + Endpoints.SEMESTERS.getPath() + "?limit=1").get();
+        Response response;
 
-			if (response.isSuccessful()) {
-				String responseBody = httpClient.getResponseBody(response).get();
-				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+        try {
+            response = httpClient.get(SubPaths.API.toString() + Endpoints.SEMESTERS.getPath() + "?limit=1").get();
 
-				if (responseJson.containsKey("pagination")) {
-					JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
+            if (response.isSuccessful()) {
+                String responseBody = httpClient.getResponseBody(response).get();
+                JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
-					if (paginationJson.containsKey("total")) {
-						return Integer.parseInt(paginationJson.get("total").toString());
-					}
-				}
-			}
-		} catch (URISyntaxException | IOException e) {
-			e.printStackTrace();
-			return -1;
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			e.printStackTrace();
-		}
+                if (responseJson.containsKey("pagination")) {
+                    JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
 
-		return -1;
-	}
+                    if (paginationJson.containsKey("total")) {
+                        return Integer.parseInt(paginationJson.get("total").toString());
+                    }
+                }
+            }
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+            return -1;
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
 
-	public List<Semester> getAllSemesters() throws NotAuthenticatedException, ParseException {
-		authService.checkIfAuthenticated();
+        return -1;
+    }
 
-		int totalAmountCourses = getAmountSemesters();
+    public List<Semester> getAllSemesters() throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
 
-		int limit = 20;
+        int totalAmountCourses = getAmountSemesters();
 
-		List<Semester> allSemesters = new ArrayList<>();
+        int limit = 20;
 
-		Response response;
+        List<Semester> allSemesters = new ArrayList<>();
 
-		for (int offset = 0; offset < totalAmountCourses; offset += limit) {
-			try {
-				response = httpClient.get(SubPaths.API.toString() + Endpoints.SEMESTERS.getPath() + "?offset=" + offset
-						+ "&limit=" + limit).get();
+        Response response;
 
-				if (response.isSuccessful()) {
-					String responseBody = httpClient.getResponseBody(response).get();
+        for (int offset = 0; offset < totalAmountCourses; offset += limit) {
+            try {
+                response = httpClient.get(SubPaths.API.toString() + Endpoints.SEMESTERS.getPath() + "?offset=" + offset
+                        + "&limit=" + limit).get();
 
-					JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+                if (response.isSuccessful()) {
+                    String responseBody = httpClient.getResponseBody(response).get();
 
-					if (responseJson.containsKey("collection")) {
+                    JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
 
-						JSONObject jsonObject = (JSONObject) responseJson.get("collection");
+                    if (responseJson.containsKey("collection")) {
 
-						for (String key : (Set<String>) jsonObject.keySet()) {
-							Semester semester = Semester.fromJson((JSONObject) jsonObject.get(key));
+                        JSONObject jsonObject = (JSONObject) responseJson.get("collection");
 
-							allSemesters.add(semester);
-						}
-					}
-				}
+                        for (String key : (Set<String>) jsonObject.keySet()) {
+                            Semester semester = Semester.fromJson((JSONObject) jsonObject.get(key));
 
-			} catch (URISyntaxException | IOException e) {
-				e.printStackTrace();
-				return null;
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			} catch (ExecutionException e) {
-				e.printStackTrace();
-			}
+                            allSemesters.add(semester);
+                        }
+                    }
+                }
 
-		}
+            } catch (URISyntaxException | IOException e) {
+                e.printStackTrace();
+                return null;
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
 
-		return allSemesters;
-	}
+        }
 
-	public Semester getCurrentSemester() throws NotAuthenticatedException, ParseException {
+        return allSemesters;
+    }
 
-		long now = (long) (new Date().getTime() / 1000.0);
+    public Semester getCurrentSemester() throws NotAuthenticatedException, ParseException {
 
-		for (Semester semester : getAllSemesters()) {
-			if (semester.getBegin() < now && now < semester.getEnd()) {
-				return semester;
-			}
-		}
-
-		return null;
-	}
-
-	public Semester getSemesterById(Id id) throws NotAuthenticatedException, ParseException {
-		authService.checkIfAuthenticated();
+        long now = (long) (new Date().getTime() / 1000.0);
 
-		Response response;
-
-		try {
-			response = httpClient.get(SubPaths.API + Endpoints.SEMESTER.getPath().replace(":semester_id", id.asHex()))
-					.get();
+        for (Semester semester : getAllSemesters()) {
+            if (semester.getBegin() < now && now < semester.getEnd()) {
+                return semester;
+            }
+        }
+
+        return null;
+    }
+
+    public Semester getSemesterById(Id id) throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
 
-			String responseBody = httpClient.getResponseBody(response).get();
-			JSONObject responseJson = (JSONObject) (new JSONParser().parse(responseBody));
+        Response response;
+
+        try {
+            response = httpClient.get(SubPaths.API + Endpoints.SEMESTER.getPath().replace(":semester_id", id.asHex()))
+                    .get();
 
-			Semester semester = Semester.fromJson(responseJson);
+            String responseBody = httpClient.getResponseBody(response).get();
+            JSONObject responseJson = (JSONObject) (new JSONParser().parse(responseBody));
 
-			return semester;
+            Semester semester = Semester.fromJson(responseJson);
 
-		} catch (URISyntaxException | IOException e) {
-			e.printStackTrace();
-			return null;
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			e.printStackTrace();
-		}
+            return semester;
 
-		return null;
-	}
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+            return null;
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
 
-	public CourseNews getCourseNewsForCourseNewsId(Id courseId, Id courseNewsId) throws NotAuthenticatedException {
-		authService.checkIfAuthenticated();
+        return null;
+    }
 
-		Response response;
+    public CourseNews getCourseNewsForCourseNewsId(Id courseId, Id courseNewsId) throws NotAuthenticatedException {
+        authService.checkIfAuthenticated();
 
-		try {
-			response = httpClient.get(SubPaths.API.toString()
-					+ Endpoints.COURSE_NEWS.toString().replace(":news_id", courseNewsId.asHex())).get();
+        Response response;
 
-			if (response.isSuccessful()) {
-				String responseBody = httpClient.getResponseBody(response).get();
-				log.debug("getCourseNewsForCourseNewsId: Response: " + responseBody);
-				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
-				responseJson.put("course_id", courseId);
-
-				return CourseNews.fromJson(responseJson);
-			} else {
-				log.error("Could not get CourseNews for CourseNewsId " + courseNewsId);
-				log.error(response.message());
-				log.error("Returning null instead.");
-
-				return null;
-			}
+        try {
+            response = httpClient.get(SubPaths.API.toString()
+                    + Endpoints.COURSE_NEWS.toString().replace(":news_id", courseNewsId.asHex())).get();
 
-		} catch (URISyntaxException | IOException e) {
-			e.printStackTrace();
-		} catch (ParseException e) {
-			e.printStackTrace();
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			e.printStackTrace();
-		}
+            if (response.isSuccessful()) {
+                String responseBody = httpClient.getResponseBody(response).get();
+                log.debug("getCourseNewsForCourseNewsId: Response: " + responseBody);
+                JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+                responseJson.put("course_id", courseId);
+
+                return CourseNews.fromJson(responseJson);
+            } else {
+                log.error("Could not get CourseNews for CourseNewsId " + courseNewsId);
+                log.error(response.message());
+                log.error("Returning null instead.");
+
+                return null;
+            }
+
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+        } catch (ParseException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
 
-		return null;
-	}
+        return null;
+    }
 
-	public int getAmountCourseNewsForCourseId(Id id) throws NotAuthenticatedException, ParseException {
-		authService.checkIfAuthenticated();
+    public int getAmountCourseNewsForCourseId(Id id) throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
 
-		Response response;
+        Response response;
 
-		try {
-			response = httpClient
-					.get(SubPaths.API.toString()
-							+ Endpoints.ALL_COURSE_NEWS.toString().replace(":course_id", id.asHex()) + "?limit=1")
-					.get();
+        try {
+            response = httpClient
+                    .get(SubPaths.API.toString()
+                            + Endpoints.ALL_COURSE_NEWS.toString().replace(":course_id", id.asHex()) + "?limit=1")
+                    .get();
+
+            if (response.isSuccessful()) {
+                String responseBody = httpClient.getResponseBody(response).get();
+                JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+                if (responseJson.containsKey("pagination")) {
+                    JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
+
+                    if (paginationJson.containsKey("total")) {
+                        return Integer.parseInt(paginationJson.get("total").toString());
+                    }
+                }
+            }
+
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+            return -1;
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
 
-			if (response.isSuccessful()) {
-				String responseBody = httpClient.getResponseBody(response).get();
-				JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+        return -1;
+    }
 
-				if (responseJson.containsKey("pagination")) {
-					JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
+    @SuppressWarnings("unchecked")
+    public List<CourseNews> getAllCourseNewsForCourseId(Id id) throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
 
-					if (paginationJson.containsKey("total")) {
-						return Integer.parseInt(paginationJson.get("total").toString());
-					}
-				}
-			}
+        int totalAmountCourseNews = getAmountCourseNewsForCourseId(id);
 
-		} catch (URISyntaxException | IOException e) {
-			e.printStackTrace();
-			return -1;
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			e.printStackTrace();
-		}
+        int limit = 20;
 
-		return -1;
-	}
+        List<CourseNews> allCourseNews = new ArrayList<>();
 
-	@SuppressWarnings("unchecked")
-	public List<CourseNews> getAllCourseNewsForCourseId(Id id) throws NotAuthenticatedException, ParseException {
-		authService.checkIfAuthenticated();
+        Response response;
 
-		int totalAmountCourseNews = getAmountCourseNewsForCourseId(id);
-
-		int limit = 20;
-
-		List<CourseNews> allCourseNews = new ArrayList<>();
-
-		Response response;
-
-		for (int offset = 0; offset < totalAmountCourseNews; offset += limit) {
-			try {
-				response = httpClient.get(
-						SubPaths.API.toString() + Endpoints.ALL_COURSE_NEWS.toString().replace(":course_id", id.asHex())
-								+ "?offset=" + offset + "&limit=" + limit)
-						.get();
-
-				if (response.isSuccessful()) {
-					String responseBody = httpClient.getResponseBody(response).get();
-					JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
-
-					if (responseJson.containsKey("collection")) {
-						for (Entry<String, JSONObject> entry : ((Map<String, JSONObject>) responseJson
-								.get("collection")).entrySet()) {
-							entry.getValue().put("course_id", id);
-							CourseNews courseNews = CourseNews.fromJson(entry.getValue());
-
-							allCourseNews.add(courseNews);
-						}
-					}
-				}
-
-			} catch (URISyntaxException | IOException e) {
-				e.printStackTrace();
-				return null;
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			} catch (ExecutionException e) {
-				e.printStackTrace();
-			}
-
-		}
-
-		return allCourseNews;
-	}
-
+        for (int offset = 0; offset < totalAmountCourseNews; offset += limit) {
+            try {
+                response = httpClient.get(
+                        SubPaths.API.toString() + Endpoints.ALL_COURSE_NEWS.toString().replace(":course_id", id.asHex())
+                                + "?offset=" + offset + "&limit=" + limit)
+                        .get();
+
+                if (response.isSuccessful()) {
+                    String responseBody = httpClient.getResponseBody(response).get();
+                    JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+                    if (responseJson.containsKey("collection")) {
+                        for (Entry<String, JSONObject> entry : ((Map<String, JSONObject>) responseJson
+                                .get("collection")).entrySet()) {
+                            entry.getValue().put("course_id", id);
+                            CourseNews courseNews = CourseNews.fromJson(entry.getValue());
+
+                            allCourseNews.add(courseNews);
+                        }
+                    }
+                }
+
+            } catch (URISyntaxException | IOException e) {
+                e.printStackTrace();
+                return null;
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        return allCourseNews;
+    }
+
+    public int getAmountMembersForCourseId(Id id) throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
+
+        Response response;
+
+        try {
+            response = httpClient
+                    .get(SubPaths.API.toString()
+                            + Endpoints.COURSE_MEMBERS.toString().replace(":course_id", id.asHex()) + "?limit=1")
+                    .get();
+
+            if (response.isSuccessful()) {
+                String responseBody = httpClient.getResponseBody(response).get();
+                JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+                if (responseJson.containsKey("pagination")) {
+                    JSONObject paginationJson = (JSONObject) responseJson.get("pagination");
+
+                    if (paginationJson.containsKey("total")) {
+                        return Integer.parseInt(paginationJson.get("total").toString());
+                    }
+                }
+            }
+
+        } catch (URISyntaxException | IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+
+        return -1;
+    }
+
+    public Map<CourseMemberType, List<User>> getAllMembersForCourseId(Id id) throws NotAuthenticatedException, ParseException {
+        authService.checkIfAuthenticated();
+
+        int totalAmountCourseMembers = getAmountMembersForCourseId(id);
+
+        int limit = 20;
+
+        Map<CourseMemberType, List<User>> courseMembersMap = new HashMap<>();
+
+        Response response;
+
+        for (int offset = 0; offset < totalAmountCourseMembers; offset += limit) {
+            try {
+                response = httpClient.get(
+                        SubPaths.API.toString() + Endpoints.COURSE_MEMBERS.toString().replace(":course_id", id.asHex())
+                                + "?offset=" + offset + "&limit=" + limit)
+                        .get();
+
+                if (response.isSuccessful()) {
+                    String responseBody = httpClient.getResponseBody(response).get();
+                    JSONObject responseJson = (JSONObject) new JSONParser().parse(responseBody);
+
+                    if (responseJson.containsKey("collection")) {
+                        for (Entry<String, JSONObject> entry : ((Map<String, JSONObject>) responseJson
+                                .get("collection")).entrySet()) {
+                            CourseMemberType courseMemberType = CourseMemberType.valueOf(entry.getValue().get("status").toString().toUpperCase());
+                            User member = User.fromJson((JSONObject) entry.getValue().get("member"));
+
+                            if (!courseMembersMap.containsKey(courseMemberType)) {
+                                courseMembersMap.put(courseMemberType, new ArrayList<>());
+                            }
+
+                            courseMembersMap.get(courseMemberType).add(member);
+                        }
+                    }
+                }
+
+            } catch (URISyntaxException | IOException e) {
+                e.printStackTrace();
+                return null;
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        return courseMembersMap;
+    }
 }

@@ -1,12 +1,13 @@
 package de.kriegel.studip.client.content.model.file;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 import de.kriegel.studip.client.content.model.data.FileRef;
 import de.kriegel.studip.client.content.model.data.Folder;
 
-public class FileRefNode {
+public class FileRefNode implements Serializable {
 
 	private FileRef fileRef;
 	private Folder folder;
