@@ -2,7 +2,9 @@ package de.kriegel.studip.client.content.model.data;
 
 import de.kriegel.studip.client.content.util.RegexHelper;
 
-public class CourseModule {
+import java.io.Serializable;
+
+public class CourseModule implements Serializable {
 
 	private final Id courseId;
 	private final CourseModuleType moduleType;

@@ -1,12 +1,13 @@
 package de.kriegel.studip.client.content.model.data;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
-public class CourseNews {
+public class CourseNews implements Serializable {
 
 	private final Id id;
 	private final String topic;

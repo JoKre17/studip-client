@@ -39,220 +39,223 @@ import okhttp3.Response;
 
 public class DownloadManager extends Observable {
 
-	private static final Logger log = LoggerFactory.getLogger(DownloadManager.class);
+    private static final Logger log = LoggerFactory.getLogger(DownloadManager.class);
 
-	private final List<CourseDownloadFinishedEventListener> courseDownloadFinishedEventListeners = new ArrayList<>();
+    private final List<CourseDownloadFinishedEventListener> courseDownloadFinishedEventListeners = new ArrayList<>();
 
-	private final CourseService courseService;
+    private final CourseService courseService;
 
-	private BasicHttpClient httpClient;
+    private BasicHttpClient httpClient;
 
-	private Path defaultDownloadDirectory;
+    private Path defaultDownloadDirectory;
 
-	private final ExecutorService es = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    private final ExecutorService es = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
-	public DownloadManager(CourseService courseService, BasicHttpClient httpClient, Path defaultDownloadDirectory) {
-		this.courseService = courseService;
-		this.httpClient = httpClient;
+    public DownloadManager(CourseService courseService, BasicHttpClient httpClient, Path defaultDownloadDirectory) {
+        this.courseService = courseService;
+        this.httpClient = httpClient;
 
-		log.info("Init DownloadManager with defaultDownloadDirectory: " + defaultDownloadDirectory.toAbsolutePath());
-		this.defaultDownloadDirectory = defaultDownloadDirectory;
-	}
+        log.info("Init DownloadManager with defaultDownloadDirectory: " + defaultDownloadDirectory.toAbsolutePath());
+        this.defaultDownloadDirectory = defaultDownloadDirectory;
+    }
 
-	public void close() {
-		log.info("Closing DownloadManager");
-		es.shutdown();
-	}
+    public void close() {
+        log.info("Closing DownloadManager");
+        es.shutdown();
+    }
 
-	public boolean createDirIfNotExists(File dir) {
-		if (dir.exists()) {
-			if (dir.isDirectory()) {
-				return true;
-			} else {
-				return false;
-			}
-		} else {
-			return dir.mkdirs();
-		}
-	}
+    public boolean createDirIfNotExists(File dir) {
+        if (dir.exists()) {
+            if (dir.isDirectory()) {
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return dir.mkdirs();
+        }
+    }
 
-	public File getDownloadDirectory() {
-		return defaultDownloadDirectory.toFile();
-	}
+    public File getDownloadDirectory() {
+        return defaultDownloadDirectory.toFile();
+    }
 
-	public void setDownloadDirectory(File defaultDownloadDirectory) {
-		this.defaultDownloadDirectory = defaultDownloadDirectory.toPath();
-	}
+    public void setDownloadDirectory(File defaultDownloadDirectory) {
+        this.defaultDownloadDirectory = defaultDownloadDirectory.toPath();
+    }
 
-	public void addCourseDownloadFinishedEventListener(
-			CourseDownloadFinishedEventListener courseDownloadFinishedEventListener) {
-		this.courseDownloadFinishedEventListeners.add(courseDownloadFinishedEventListener);
-	}
+    public void addCourseDownloadFinishedEventListener(
+            CourseDownloadFinishedEventListener courseDownloadFinishedEventListener) {
+        this.courseDownloadFinishedEventListeners.add(courseDownloadFinishedEventListener);
+    }
 
-	public void removeCourseDownloadFinishedEventListener(
-			CourseDownloadFinishedEventListener courseDownloadFinishedEventListener) {
-		this.courseDownloadFinishedEventListeners.remove(courseDownloadFinishedEventListener);
-	}
+    public void removeCourseDownloadFinishedEventListener(
+            CourseDownloadFinishedEventListener courseDownloadFinishedEventListener) {
+        this.courseDownloadFinishedEventListeners.remove(courseDownloadFinishedEventListener);
+    }
 
-	public List<CourseDownloadFinishedEventListener> getCourseDownloadFinishedEventListeners() {
-		return courseDownloadFinishedEventListeners;
-	}
+    public List<CourseDownloadFinishedEventListener> getCourseDownloadFinishedEventListeners() {
+        return courseDownloadFinishedEventListeners;
+    }
 
-	private File getSemesterDirectory(Semester semester) {
-		return new File(getDownloadDirectory().getAbsolutePath() + "/" + semester.getTitleAsValidFilename());
-	}
+    private File getSemesterDirectory(Semester semester) {
+        return new File(getDownloadDirectory().getAbsolutePath() + "/" + semester.getTitleAsValidFilename());
+    }
 
-	private File getCourseDirectory(Course course) {
-		Semester semester;
-		try {
-			semester = courseService.getSemesterById(course.getStartSemesterId());
-		} catch (NotAuthenticatedException | ParseException e) {
-			e.printStackTrace();
-			return null;
-		}
+    private File getCourseDirectory(Course course) {
+        Semester semester;
+        try {
+            semester = courseService.getSemesterById(course.getStartSemesterId());
+        } catch (NotAuthenticatedException | ParseException e) {
+            e.printStackTrace();
+            return null;
+        }
 
-		String courseFilename = course.getTitleAsValidFilename();
+        String courseFilename = course.getTitleAsValidFilename();
 
-		if (course.isTutorium()) {
-			courseFilename = courseFilename.replace("Übung", "").trim() + "/Übung";
-		} else {
-			courseFilename = courseFilename + "/Vorlesung";
-		}
+        if (course.isTutorium()) {
+            courseFilename = courseFilename.replace("Übung", "").trim() + "/Übung";
+        } else {
+            courseFilename = courseFilename + "/Vorlesung";
+        }
 
-		return new File(getSemesterDirectory(semester).getAbsolutePath() + "/" + courseFilename);
-	}
+        return new File(getSemesterDirectory(semester).getAbsolutePath() + "/" + courseFilename);
+    }
 
-	public boolean createDownloadDirectoryIfNotExists() {
-		File downloadDir = getDownloadDirectory();
+    public boolean createDownloadDirectoryIfNotExists() {
+        File downloadDir = getDownloadDirectory();
 
-		return createDirIfNotExists(downloadDir);
-	}
+        return createDirIfNotExists(downloadDir);
+    }
 
-	public boolean createSemesterDirectoryIfNotExists(Semester semester) {
-		File semesterDir = getSemesterDirectory(semester);
+    public boolean createSemesterDirectoryIfNotExists(Semester semester) {
+        File semesterDir = getSemesterDirectory(semester);
 
-		return createDirIfNotExists(semesterDir);
-	}
+        return createDirIfNotExists(semesterDir);
+    }
 
-	public boolean createCourseDirectoryIfNotExists(Course course) {
-		File courseDir = getCourseDirectory(course);
+    public boolean createCourseDirectoryIfNotExists(Course course) {
+        File courseDir = getCourseDirectory(course);
 
-		return createDirIfNotExists(courseDir);
-	}
+        return createDirIfNotExists(courseDir);
+    }
 
-	public void downloadFileRefTree(Course course, FileRefTree fileRefTree, AtomicBoolean cancelled) {
+    public void downloadFileRefTree(Course course, FileRefTree fileRefTree, AtomicBoolean cancelled) {
 
-		if (!createCourseDirectoryIfNotExists(course)) {
-			return;
-		}
+        if (!createCourseDirectoryIfNotExists(course)) {
+            return;
+        }
 
-		File parentDir = getCourseDirectory(course);
+        File parentDir = getCourseDirectory(course);
 
-		Queue<CompletableFuture<Void>> downloadTasks = new ConcurrentLinkedQueue<>();
-		List<File> toBeDownloadedFiles = new ArrayList<>();
+        Queue<CompletableFuture<Void>> downloadTasks = new ConcurrentLinkedQueue<>();
+        List<File> toBeDownloadedFiles = new ArrayList<>();
 
-		downloadFileRefTreeRecursive(parentDir, fileRefTree.getRoot(), downloadTasks, toBeDownloadedFiles);
+        downloadFileRefTreeRecursive(parentDir, fileRefTree.getRoot(), downloadTasks, toBeDownloadedFiles);
 
-		int size = downloadTasks.size();
+        int size = downloadTasks.size();
 
-		int count = 0;
-		log.debug(count + "/" + size + " : " + course.getTitle());
-		for (CompletableFuture<Void> task : downloadTasks) {
-			if (cancelled != null && cancelled.get()) {
-				task.cancel(true);
-				continue;
-			}
+        int count = 0;
+        log.debug(count + "/" + size + " : " + course.getTitle());
+        for (CompletableFuture<Void> task : downloadTasks) {
+            if (cancelled != null && cancelled.get()) {
+                task.cancel(true);
+                continue;
+            }
 
-			try {
-				task.get();
-				count++;
-				log.debug(count + "/" + size + " : " + course.getTitle());
-				setChanged();
-				notifyObservers(new CourseDownloadProgressEvent(course, count / (double) size));
-			} catch (InterruptedException | ExecutionException e) {
-				e.printStackTrace();
-			}
+            try {
+                task.get();
+                count++;
+                log.debug(count + "/" + size + " : " + course.getTitle());
+                setChanged();
+                notifyObservers(new CourseDownloadProgressEvent(course, count / (double) size));
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
 
-		}
+        }
 
-		if (cancelled != null && cancelled.get()) {
-			return;
-		}
+        if (cancelled != null && cancelled.get()) {
+            return;
+        }
 
-		if (size > 0) {
-			setChanged();
-			notifyObservers(new CourseDownloadProgressEvent(course, count / (double) size));
-			for (CourseDownloadFinishedEventListener eventListener : courseDownloadFinishedEventListeners) {
-				eventListener.onCourseDownloadFinished(new CourseDownloadFinishedEvent(course, toBeDownloadedFiles));
-			}
-			log.info("DONE : " + course.getTitle());
-		}
+        if (size > 0) {
+            setChanged();
+            notifyObservers(new CourseDownloadProgressEvent(course, count / (double) size));
+            for (CourseDownloadFinishedEventListener eventListener : courseDownloadFinishedEventListeners) {
+                eventListener.onCourseDownloadFinished(new CourseDownloadFinishedEvent(course, toBeDownloadedFiles));
+            }
+            log.info("DONE : " + course.getTitle());
+        }
 
-	}
+    }
 
-	private void downloadFileRefTreeRecursive(File parentDir, FileRefNode node,
-			Queue<CompletableFuture<Void>> downloadTasks, List<File> toBeDownloadedFiles) {
+    private void downloadFileRefTreeRecursive(File parentDir, FileRefNode node,
+                                              Queue<CompletableFuture<Void>> downloadTasks, List<File> toBeDownloadedFiles) {
 
-		for (FileRefNode child : node.getChildren()) {
-			if (child.isDirectory()) {
-				File dir = new File(parentDir.getAbsolutePath() + "/" + child.getFolder().getNameValidAsFilename());
-				createDirIfNotExists(dir);
+        for (FileRefNode child : node.getChildren()) {
+            if (child.isDirectory()) {
+                File dir = new File(parentDir.getAbsolutePath() + "/" + child.getFolder().getNameValidAsFilename());
+                createDirIfNotExists(dir);
 
-				downloadFileRefTreeRecursive(dir, child, downloadTasks, toBeDownloadedFiles);
-			} else {
+                downloadFileRefTreeRecursive(dir, child, downloadTasks, toBeDownloadedFiles);
+            } else {
 
-				FileRef fileRef = child.getFileRef();
-				File outputFile = new File(parentDir.getAbsolutePath() + "/" + fileRef.getName());
+                FileRef fileRef = child.getFileRef();
+                File outputFile = new File(parentDir.getAbsolutePath() + "/" + fileRef.getName());
 
-				// dont create a download task for a file which has already been downloaded AND
-				// is up to date
-				if (outputFile.exists()) {
-					if (fileRef.getChdate() < outputFile.lastModified()) {
-						continue;
-					}
-				} else {
-					try {
-						outputFile.createNewFile();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-				}
+                // dont create a download task for a file which has already been downloaded AND
+                // is up to date
+                if (outputFile.exists()) {
+                    if (fileRef.getChdate() < outputFile.lastModified()) {
+                        continue;
+                    }
+                } else {
+                    try {
+                        outputFile.createNewFile();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
 
-				toBeDownloadedFiles.add(outputFile);
+                toBeDownloadedFiles.add(outputFile);
 
-				downloadTasks.add(CompletableFuture.runAsync(() -> {
+                downloadTasks.add(CompletableFuture.runAsync(new Runnable() {
 
-					Response response;
+                    public void run() {
+                        Response response;
 
-					try {
-						response = httpClient.get(SubPaths.API
-								+ Endpoints.FILE_DOWNLOAD.getPath().replace(":file_id", fileRef.getId().asHex())).get();
+                        try {
+                            response = httpClient.get(SubPaths.API
+                                    + Endpoints.FILE_DOWNLOAD.getPath().replace(":file_id", fileRef.getId().asHex())).get();
 
-						BufferedInputStream bis = new BufferedInputStream(response.body().byteStream());
-						BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(outputFile));
+                            BufferedInputStream bis = new BufferedInputStream(response.body().byteStream());
+                            BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(outputFile));
 
-						byte[] buffer = new byte[512];
+                            byte[] buffer = new byte[512];
 
-						while (bis.read(buffer) != -1) {
-							bos.write(buffer);
-						}
+                            while (bis.read(buffer) != -1) {
+                                bos.write(buffer);
+                            }
 
-						bis.close();
-						bos.close();
+                            bis.close();
+                            bos.close();
 
-						log.debug("Downloaded " + child.getFileRef().getName() + " " + (outputFile.length() / 1048576f)
-								+ " MB");
+                            log.debug("Downloaded " + child.getFileRef().getName() + " " + (outputFile.length() / 1048576f)
+                                    + " MB");
 
-					} catch (URISyntaxException | IOException e) {
-						e.printStackTrace();
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					} catch (ExecutionException e) {
-						e.printStackTrace();
-					}
-				}, es));
-			}
-		}
-	}
+                        } catch (URISyntaxException | IOException e) {
+                            e.printStackTrace();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        } catch (ExecutionException e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                }, es));
+            }
+        }
+    }
 
 }

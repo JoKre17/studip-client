@@ -1,6 +1,9 @@
 package de.kriegel.studip.client.content.model.data;
 
-public enum CourseMemberType {
+
+import java.io.Serializable;
+
+public enum CourseMemberType implements Serializable {
 
 	USER("user", "user"), AUTOR("autor", "autor"), TUTOR("tutor", "tutor"), DOZENT("dozent", "dozent");
 	

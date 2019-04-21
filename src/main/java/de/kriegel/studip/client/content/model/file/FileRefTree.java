@@ -10,6 +10,10 @@ public class FileRefTree implements Serializable {
 
 	private FileRefNode root;
 
+	public FileRefTree(FileRefNode root) {
+		this.root = root;
+	}
+
 	public FileRefTree(FileRef rootFileRef) {
 		root = new FileRefNode(rootFileRef);
 	}

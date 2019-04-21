@@ -4,7 +4,9 @@ import org.json.simple.JSONObject;
 
 import de.kriegel.studip.client.content.util.RegexHelper;
 
-public class Semester {
+import java.io.Serializable;
+
+public class Semester implements Serializable {
 
 	private final Id id;
 	private final String title;
@@ -120,6 +122,11 @@ public class Semester {
 			return false;
 		}
 		return true;
+	}
+
+	@Override
+	public String toString() {
+		return title;
 	}
 
 }

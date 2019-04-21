@@ -2,7 +2,9 @@ package de.kriegel.studip.client.content.model.data;
 
 import org.json.simple.JSONObject;
 
-public class UserInformation {
+import java.io.Serializable;
+
+public class UserInformation implements Serializable {
 
 	private final String username;
 	private final String formatted;

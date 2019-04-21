@@ -1,6 +1,8 @@
 package de.kriegel.studip.client.content.model.data;
 
-public enum CourseModuleType {
+import java.io.Serializable;
+
+public enum CourseModuleType implements Serializable {
 
 	FORUM("forum", "forum_categories"), DOCUMENTS("documents", "files"), WIKI("wiki", "wiki");
 	
